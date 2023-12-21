@@ -21,6 +21,7 @@ import java.util.Date;
 @TableName("ap_article")
 public class ApArticle implements Serializable {
 
+    /* type = IdType.ID_WORKER 表示使用的是雪花算法 */
     @TableId(value = "id",type = IdType.ID_WORKER)
     private Long id;
 
