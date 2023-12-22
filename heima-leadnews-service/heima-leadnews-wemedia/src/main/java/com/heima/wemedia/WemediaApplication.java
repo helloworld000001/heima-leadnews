@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 
 @SpringBootApplication
@@ -16,6 +17,8 @@ import org.springframework.context.annotation.Bean;
 @MapperScan("com.heima.wemedia.mapper")
 // 加上Feign注解，相关服务才能被Feign扫描到
 @EnableFeignClients(basePackages = "com.heima.apis")
+// 开启异步调用
+@EnableAsync
 public class WemediaApplication {
 
     public static void main(String[] args) {
