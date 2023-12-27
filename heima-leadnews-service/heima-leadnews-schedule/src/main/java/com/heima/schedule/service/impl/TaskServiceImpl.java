@@ -14,11 +14,13 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -219,5 +221,40 @@ public class TaskServiceImpl implements TaskService {
         }
 
         return task;
+    }
+
+    /**
+     * 未来数据定时刷新：每分钟刷新一次
+     */
+    @Scheduled(cron = "0/1 * * * * ?")
+    public void refresh() {
+        // 上锁：当两个服务器同时操作key时，上锁防止重复刷新操作
+        String token = cacheService.tryLock("FUTURE_TASK_SYNC", 1000 * 30);
+        if (StringUtils.isNotBlank(token)) {
+
+            // 获取未来所有任务的集合keys
+            /*
+             * cacheService.keys()会一次查询出所有的key,CPU占用极高，慎用
+             * cacheService.scan()会分批次查询,更加适合
+             * */
+            Set<String> futureKeys = cacheService.scan(ScheduleConstants.FUTURE + "*");
+
+            // 按照key和分值查询符合条件的数据
+            for (String futureKey : futureKeys) {
+                // 获取当前数据的key topic,本质就是将获取的futureKey换类型为topic，成为一个新的key
+                String topicKey = ScheduleConstants.TOPIC + futureKey.split(ScheduleConstants.FUTURE)[1];
+
+                // 在zset中，key是future_100_50,value是封装的对象,score表示的是执行时间的时间戳
+                // 那么这里的三个参数表示的分别是 要查询的key min max(按score的范围查询)
+                // 这里表示的是，只有当 当前时间 > score(执行时间)时才会被查出来 --- 数据到期
+                Set<String> tasks = cacheService.zRangeByScore(futureKey, 0, System.currentTimeMillis());
+
+                // 同步数据
+                if (!tasks.isEmpty()) {
+                    // 实现了：topicKey(Push  futureKey(Remove
+                    cacheService.refreshWithPipeline(futureKey, topicKey, tasks);
+                }
+            }
+        }
     }
 }
