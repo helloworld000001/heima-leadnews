@@ -36,4 +36,9 @@ public class TaskServiceImplTest {
     public void cancelTask(){
          taskService.cancelTask(1739870582847111169L);
     }
+
+    @Test
+    public void pull(){
+        taskService.pull(100, 50);
+    }
 }
