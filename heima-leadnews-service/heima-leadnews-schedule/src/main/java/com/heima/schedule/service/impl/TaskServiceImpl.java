@@ -199,7 +199,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     /**
-     * 根据类型和优先级拉取任务
+     * 根据类型和优先级从当前消费队列中（list拉取任务
      *
      * @param type
      * @param priority
