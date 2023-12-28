@@ -1,6 +1,7 @@
 package com.heima.schedule.service.impl;
 
 import com.alibaba.fastjson.JSON;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.heima.common.constants.ScheduleConstants;
 import com.heima.common.redis.CacheService;
 import com.heima.model.schedule.dtos.Task;
@@ -17,9 +18,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StopWatch;
 
+import javax.annotation.PostConstruct;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -256,5 +260,46 @@ public class TaskServiceImpl implements TaskService {
                 }
             }
         }
+    }
+
+    /**
+     * 数据库方法定时同步到redis中:每5min同步一次
+     */
+    // 开机执行该语句，初始化方法
+    @PostConstruct
+    @Scheduled(cron = "0 */5 * * * ?")
+    public void reloadData(){
+        // 清理缓存中的数据 list zset
+        clearCache();
+
+        // 查询db中小于5min要执行的任务
+
+        // 获取 5min 之后的值 毫秒值
+        Calendar instance = Calendar.getInstance();
+        instance.add(Calendar.MINUTE, 5);
+
+        List<Taskinfo> taskinfoList = taskinfoMapper.selectList(Wrappers.<Taskinfo>lambdaQuery().lt(Taskinfo::getExecuteTime, instance.getTimeInMillis()));
+
+        // 把任务添加到redis中
+        if(taskinfoList != null&& taskinfoList.size() > 0){
+            for (Taskinfo taskinfo : taskinfoList) {
+                Task task = new Task();
+                BeanUtils.copyProperties(taskinfo, task);
+                task.setExecuteTime(taskinfo.getExecuteTime().getTime());
+                addTaskToCache(task);
+            }
+        }
+    }
+
+    /**
+     * 清理缓存中的数据
+     */
+    public void clearCache(){
+        // 查询当前所有的TOPIC_KEY 和 FUTURE_KEY
+        Set<String> topicKeys = cacheService.scan(ScheduleConstants.TOPIC + "*");
+        Set<String> futureKeys = cacheService.scan(ScheduleConstants.FUTURE + "*");
+
+        cacheService.delete(topicKeys);
+        cacheService.delete(futureKeys);
     }
 }
